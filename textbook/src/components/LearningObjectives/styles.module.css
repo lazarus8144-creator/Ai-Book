@@ -1,0 +1,33 @@
+.container {
+  background: var(--ifm-color-primary-lightest);
+  border-left: 4px solid var(--ifm-color-primary);
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.title {
+  margin: 0 0 1rem 0;
+  color: var(--ifm-color-primary-darkest);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.item {
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+/* Dark mode adjustments */
+[data-theme='dark'] .container {
+  background: rgba(37, 194, 160, 0.1);
+}
+
+[data-theme='dark'] .title {
+  color: var(--ifm-color-primary-lightest);
+}

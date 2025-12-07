@@ -1,0 +1,23 @@
+{
+  "label": "Module 2: Digital Twin (Gazebo & Unity)",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Master simulation environments to test and validate robot designs before physical deployment."
+  },
+  "customProps": {
+    "learningObjectives": [
+      "Set up Gazebo simulation environments",
+      "Create URDF models for robot description",
+      "Integrate Unity for photorealistic rendering",
+      "Simulate sensors and actuators accurately"
+    ],
+    "prerequisites": [
+      "Module 1: ROS 2 completion",
+      "Basic 3D modeling concepts",
+      "XML/URDF understanding"
+    ],
+    "estimatedHours": 10,
+    "difficulty": "intermediate"
+  }
+}

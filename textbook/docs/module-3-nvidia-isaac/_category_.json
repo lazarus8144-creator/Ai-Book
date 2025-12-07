@@ -1,0 +1,23 @@
+{
+  "label": "Module 3: AI-Robot Brain (NVIDIA Isaac)",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "description": "Add intelligence to your robots with NVIDIA Isaac for perception, navigation, and manipulation."
+  },
+  "customProps": {
+    "learningObjectives": [
+      "Deploy NVIDIA Isaac Sim for AI development",
+      "Implement perception pipelines with Isaac",
+      "Configure navigation stacks for autonomous movement",
+      "Integrate Isaac with ROS 2 workflows"
+    ],
+    "prerequisites": [
+      "Module 1 & 2 completion",
+      "Basic machine learning concepts",
+      "NVIDIA Jetson or CUDA-enabled GPU"
+    ],
+    "estimatedHours": 14,
+    "difficulty": "advanced"
+  }
+}

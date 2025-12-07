@@ -1,0 +1,23 @@
+{
+  "label": "Module 1: Robotic Nervous System (ROS 2)",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "description": "Learn the fundamentals of ROS 2, the robotic operating system that serves as the nervous system for humanoid robots."
+  },
+  "customProps": {
+    "learningObjectives": [
+      "Understand ROS 2 architecture and communication patterns",
+      "Create and manage ROS 2 nodes, topics, and services",
+      "Build launch files for multi-node systems",
+      "Debug ROS 2 applications using CLI tools"
+    ],
+    "prerequisites": [
+      "Basic Python programming",
+      "Linux command line familiarity",
+      "Understanding of publish-subscribe patterns"
+    ],
+    "estimatedHours": 12,
+    "difficulty": "intermediate"
+  }
+}
