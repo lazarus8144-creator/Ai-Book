@@ -2,6 +2,5 @@
   "buildCommand": "cd textbook && npm run build",
   "outputDirectory": "textbook/build",
   "installCommand": "cd textbook && npm install",
-  "framework": "docusaurus2",
   "devCommand": "cd textbook && npm run start"
 }
