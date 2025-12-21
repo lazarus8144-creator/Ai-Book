@@ -1,5 +1,6 @@
 import React from 'react';
 import ChatWidget from '@site/src/components/ChatWidget';
+import { AuthProvider } from '@site/src/components/AuthProvider';
 
 // Docusaurus Root component wrapper
 // This wraps the entire app and allows us to add global components
@@ -11,9 +12,9 @@ export default function Root({ children }) {
     : 'http://localhost:8000';
 
   return (
-    <>
+    <AuthProvider>
       {children}
       <ChatWidget apiBaseUrl={apiBaseUrl} />
-    </>
+    </AuthProvider>
   );
 }
