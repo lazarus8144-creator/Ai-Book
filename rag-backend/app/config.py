@@ -52,6 +52,18 @@ class Settings(BaseSettings):
     # Demo Mode (for offline/no-API-calls testing)
     demo_mode: bool = True  # Set to False to use real OpenAI API
 
+    # Database Configuration
+    database_url: str = "postgresql://user:password@localhost:5432/textbook"
+
+    # Authentication Configuration
+    jwt_secret_key: str = "your-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 1440  # 24 hours
+
+    # Email Configuration (Resend)
+    resend_api_key: str = ""
+    from_email: str = "noreply@example.com"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

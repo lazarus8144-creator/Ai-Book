@@ -1,0 +1,349 @@
+openapi: 3.1.0
+info:
+  title: Personalization API
+  description: API for personalized textbook content adaptation based on user learning profiles
+  version: 1.0.0
+  contact:
+    name: AI-Native Textbook Team
+    email: support@example.com
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+  - url: https://api.robotics-textbook.com/api/v1
+    description: Production
+
+tags:
+  - name: Personalization
+    description: Content personalization endpoints
+  - name: Preferences
+    description: User personalization settings
+  - name: Recommendations
+    description: Chapter recommendation system
+
+paths:
+  /personalization/personalize:
+    post:
+      tags: [Personalization]
+      summary: Generate personalized chapter content
+      description: |
+        Generates personalized version of a chapter based on user's skill level,
+        learning goals, and preferences. Returns cached version if available (SC-008: <1s).
+        New generation takes ~15 seconds (SC-003).
+      operationId: personalizeChapter
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonalizationRequest'
+      responses:
+        '200':
+          description: Personalized content generated or retrieved from cache
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalizedContentResponse'
+        '400':
+          description: Invalid request (missing chapter_id, invalid skill level)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized (missing or invalid JWT token)
+        '404':
+          description: Chapter not found
+        '429':
+          description: Rate limit exceeded (max 10 personalizations per hour)
+        '500':
+          description: OpenAI API error or server error
+
+  /personalization/chapter/{chapter_id}:
+    get:
+      tags: [Personalization]
+      summary: Retrieve personalized or original chapter content
+      description: |
+        Get chapter content in original or personalized view (FR-015).
+        Supports toggle between versions (FR-016).
+      operationId: getChapterContent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chapter_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "1.2-ros2-nodes"
+        - name: view
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [original, personalized]
+            default: original
+      responses:
+        '200':
+          description: Chapter content retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChapterContentResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Chapter or personalized version not found
+
+  /personalization/preferences:
+    get:
+      tags: [Preferences]
+      summary: Get user personalization preferences
+      description: Retrieve current personalization settings (verbosity, examples, code comments)
+      operationId: getPreferences
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Preferences retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalizationPreferencesResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Preferences not found (user hasn't set preferences yet)
+
+    put:
+      tags: [Preferences]
+      summary: Update personalization preferences
+      description: |
+        Update user's personalization settings. **Side effect**: Invalidates all
+        cached personalized content (FR-022), requiring regeneration on next access.
+      operationId: updatePreferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonalizationPreferencesUpdate'
+      responses:
+        '200':
+          description: Preferences updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalizationPreferencesResponse'
+        '400':
+          description: Invalid preference values
+        '401':
+          description: Unauthorized
+
+  /personalization/recommendations/{chapter_id}:
+    get:
+      tags: [Recommendations]
+      summary: Get personalized next chapter recommendations
+      description: |
+        Returns top 3 recommended chapters based on user's learning goals and progress (FR-029 to FR-032).
+        Recommendations cached for 7 days, then regenerated.
+      operationId: getRecommendations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chapter_id
+          in: path
+          required: true
+          description: Current chapter ID
+          schema:
+            type: string
+            example: "1.2-ros2-nodes"
+      responses:
+        '200':
+          description: Recommendations generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChapterRecommendationResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Chapter not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from authentication (Feature 003)
+
+  schemas:
+    PersonalizationRequest:
+      type: object
+      required:
+        - chapter_id
+      properties:
+        chapter_id:
+          type: string
+          description: Chapter identifier (e.g., "1.2-ros2-nodes")
+          example: "1.2-ros2-nodes"
+        force_regenerate:
+          type: boolean
+          description: Force regeneration even if cached version exists
+          default: false
+
+    PersonalizedContentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Personalized content ID
+        user_id:
+          type: string
+          format: uuid
+        chapter_id:
+          type: string
+          example: "1.2-ros2-nodes"
+        personalized_markdown:
+          type: string
+          description: Personalized chapter content in markdown format
+          example: "# ROS 2 Nodes (Simplified for Beginners)\n\n..."
+        original_content_hash:
+          type: string
+          description: SHA-256 hash of original content
+        created_at:
+          type: string
+          format: date-time
+        last_accessed_at:
+          type: string
+          format: date-time
+        is_invalid:
+          type: boolean
+          description: Whether cache is invalid (profile or content changed)
+        from_cache:
+          type: boolean
+          description: True if retrieved from cache, false if newly generated
+        generation_time_ms:
+          type: integer
+          description: Time taken to generate (null if from cache)
+          example: 12450
+          nullable: true
+
+    ChapterContentResponse:
+      type: object
+      properties:
+        chapter_id:
+          type: string
+          example: "1.2-ros2-nodes"
+        content:
+          type: string
+          description: Chapter content (original or personalized markdown)
+        view_type:
+          type: string
+          enum: [original, personalized]
+        last_updated:
+          type: string
+          format: date-time
+          description: When content was last updated or personalized
+
+    PersonalizationPreferencesUpdate:
+      type: object
+      properties:
+        verbosity_level:
+          type: string
+          enum: [concise, moderate, detailed]
+          description: |
+            - concise: Shorter explanations, fewer examples
+            - moderate: Balanced (default)
+            - detailed: Comprehensive explanations, more examples
+        example_preference:
+          type: string
+          enum: [theoretical, practical, mixed]
+          description: |
+            - theoretical: Academic examples, mathematical proofs
+            - practical: Real-world projects, industry use cases
+            - mixed: Balance of both (default)
+        code_comment_depth:
+          type: string
+          enum: [minimal, standard, extensive]
+          description: |
+            - minimal: Only non-obvious logic
+            - standard: Moderate commenting (default)
+            - extensive: Line-by-line explanations
+
+    PersonalizationPreferencesResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        verbosity_level:
+          type: string
+          enum: [concise, moderate, detailed]
+        example_preference:
+          type: string
+          enum: [theoretical, practical, mixed]
+        code_comment_depth:
+          type: string
+          enum: [minimal, standard, extensive]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RecommendationItem:
+      type: object
+      properties:
+        chapter_id:
+          type: string
+          example: "1.3-ros2-topics"
+        title:
+          type: string
+          example: "ROS 2 Topics"
+        reason:
+          type: string
+          description: Human-readable explanation for recommendation
+          example: "Matches your goal: message passing systems"
+
+    ChapterRecommendationResponse:
+      type: object
+      properties:
+        current_chapter_id:
+          type: string
+          example: "1.2-ros2-nodes"
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendationItem'
+          maxItems: 3
+          description: Top 3 recommended next chapters
+        generated_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          description: Recommendations expire after 7 days
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Invalid chapter_id"
+        detail:
+          type: string
+          description: Additional error details
+          example: "Chapter '1.99-invalid' not found in textbook"
+        status_code:
+          type: integer
+          example: 400
