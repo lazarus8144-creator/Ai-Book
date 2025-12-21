@@ -107,11 +107,17 @@ async def root():
 
 
 # Register API routers
-from app.api.routes import chat, health, ingest
+from app.api.routes import chat, health, ingest, auth
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+# Add rate limiting exception handler
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(ingest.router, prefix="/api/v1", tags=["ingest"])
+app.include_router(auth.router, tags=["authentication"])
 
 
 if __name__ == "__main__":

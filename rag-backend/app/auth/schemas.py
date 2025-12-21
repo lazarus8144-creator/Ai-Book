@@ -30,7 +30,8 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     created_at: datetime
-    last_login_at: Optional[datetime]
+    last_login_at: Optional[datetime] = None
+    profile: Optional["LearningProfileResponse"] = None
 
     class Config:
         from_attributes = True
@@ -92,7 +93,6 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
-    profile: Optional[LearningProfileResponse]
 
 
 class PasswordResetRequest(BaseModel):
