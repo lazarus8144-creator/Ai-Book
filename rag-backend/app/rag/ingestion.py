@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 from pathlib import Path
 import frontmatter
 import re
+import uuid
 
 from app.rag.chunking import get_chunking_service
 from app.rag.embeddings import get_embedding_service
@@ -95,7 +96,8 @@ class IngestionPipeline:
                     "token_count": chunk["token_count"],
                 }
                 payloads.append(payload)
-                ids.append(f"{chunk['metadata']['chapter']}_chunk_{idx}")
+                # Generate UUID for each chunk
+                ids.append(str(uuid.uuid4()))
 
             # Upsert to Qdrant
             logger.info(f"Upserting {len(embeddings)} vectors to Qdrant...")

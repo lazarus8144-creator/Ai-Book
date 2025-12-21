@@ -50,7 +50,9 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # Demo Mode (for offline/no-API-calls testing)
-    demo_mode: bool = True  # Set to False to use real OpenAI API
+    # NOTE: Set to False to use real OpenAI embeddings for better search accuracy
+    # For production, set DEMO_MODE=false in .env file
+    demo_mode: bool = True
 
     # Database Configuration
     database_url: str = "postgresql://user:password@localhost:5432/textbook"
