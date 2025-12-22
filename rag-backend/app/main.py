@@ -72,6 +72,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Configure CSRF protection
+from app.middleware import CSRFMiddleware
+app.add_middleware(CSRFMiddleware)
+
 
 # Global exception handler
 @app.exception_handler(Exception)

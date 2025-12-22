@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../AuthProvider';
+import PasswordResetModal from '../PasswordResetModal';
 import styles from './styles.module.css';
 
 const loginSchema = z.object({
@@ -22,6 +23,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const { login } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
 
   const {
     register,
@@ -106,11 +108,29 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             </label>
           </div>
 
+          <div className={styles.forgotPasswordContainer}>
+            <button
+              type="button"
+              className={styles.forgotPasswordLink}
+              onClick={() => {
+                setShowPasswordReset(true);
+                onClose();
+              }}
+            >
+              Forgot Password?
+            </button>
+          </div>
+
           <button type="submit" className={styles.submitButton} disabled={isSubmitting}>
             {isSubmitting ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
       </div>
+
+      <PasswordResetModal
+        isOpen={showPasswordReset}
+        onClose={() => setShowPasswordReset(false)}
+      />
     </div>
   );
 }
