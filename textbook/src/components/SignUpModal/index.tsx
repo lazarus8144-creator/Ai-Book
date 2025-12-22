@@ -56,16 +56,22 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
+    <div
+      className={styles.modalOverlay}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="signup-modal-title"
+    >
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
-          <h2>Create Your Account</h2>
-          <button className={styles.closeButton} onClick={onClose} aria-label="Close modal">
+          <h2 id="signup-modal-title">Create Your Account</h2>
+          <button className={styles.closeButton} onClick={onClose} aria-label="Close signup modal">
             ×
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className={styles.form}>
+        <form onSubmit={handleSubmit(onSubmit)} className={styles.form} aria-label="Sign up form">
           {error && (
             <div className={styles.errorAlert} role="alert">
               {error}

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../AuthProvider';
 import styles from './styles.module.css';
 
 interface Citation {
@@ -22,6 +23,7 @@ interface ChatWidgetProps {
 }
 
 export default function ChatWidget({ apiBaseUrl = 'http://localhost:8000' }: ChatWidgetProps) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -69,10 +71,13 @@ export default function ChatWidget({ apiBaseUrl = 'http://localhost:8000' }: Cha
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Send cookies for authentication
         body: JSON.stringify({
           query: inputValue,
           mode: mode,
           selected_text: mode === 'selected_text' ? selectedText : null,
+          user_id: user?.id, // Include user_id if authenticated
+          skill_level: user?.profile?.skill_level, // Include skill level for personalization
         }),
       });
 

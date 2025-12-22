@@ -53,16 +53,22 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
+    <div
+      className={styles.modalOverlay}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="login-modal-title"
+    >
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
-          <h2>Welcome Back</h2>
-          <button className={styles.closeButton} onClick={onClose} aria-label="Close modal">
+          <h2 id="login-modal-title">Welcome Back</h2>
+          <button className={styles.closeButton} onClick={onClose} aria-label="Close login modal">
             ×
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className={styles.form}>
+        <form onSubmit={handleSubmit(onSubmit)} className={styles.form} aria-label="Login form">
           {error && (
             <div className={styles.errorAlert} role="alert">
               {error}

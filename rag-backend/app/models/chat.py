@@ -32,6 +32,12 @@ class ChatQuery(BaseModel):
     filters: Optional[dict] = Field(
         None, description="Optional filters (e.g., {'module': 'module-1-ros2'})"
     )
+    user_id: Optional[int] = Field(
+        None, description="Optional authenticated user ID for personalization"
+    )
+    skill_level: Optional[Literal["beginner", "intermediate", "advanced"]] = Field(
+        None, description="Optional user skill level for response personalization"
+    )
 
 
 class ChatResponse(BaseModel):
