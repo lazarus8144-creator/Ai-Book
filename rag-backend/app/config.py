@@ -50,8 +50,7 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # Demo Mode (for offline/no-API-calls testing)
-    # NOTE: Set to False to use real OpenAI embeddings for better search accuracy
-    # For production, set DEMO_MODE=false in .env file
+    # NOTE: Keep True to avoid OpenAI API costs. Only set to False with valid API quota.
     demo_mode: bool = True
 
     # Database Configuration

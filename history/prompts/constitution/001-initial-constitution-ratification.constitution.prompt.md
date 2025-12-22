@@ -133,7 +133,7 @@ Created and ratified **v1.0.0** of the Physical AI & Humanoid Robotics Textbook 
 - ✅ Impact: Established foundational governance for entire hackathon project
 - 🧪 Tests: N/A (governance document, no code tests)
 - 📁 Files: 1 file created (.specify/memory/constitution.md)
-- 🔁 Next prompts: `/sp.specify` for Phase 1 features (textbook, RAG chatbot)
+- 🔁 Next prompts: `/sp.specify` for Phase 1 features (textbook, RAG cclearhatbot)
 - 🧠 Reflection: Constitution provides clear decision framework; phased approach with point allocation ensures focus on required deliverables first
 
 ## Evaluation notes (flywheel)
