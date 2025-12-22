@@ -4,7 +4,7 @@ Authentication API endpoints
 Handles user registration, login, logout, and session management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -18,6 +18,7 @@ from app.auth.schemas import (
 from app.auth.service import AuthService
 from app.auth.dependencies import get_current_user
 from app.auth.models import User
+from app.config import settings
 
 # Create router
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
@@ -30,6 +31,7 @@ limiter = Limiter(key_func=get_remote_address)
 @limiter.limit("3/hour")
 async def register(
     request: Request,
+    response: Response,
     user_data: UserCreate,
     db: Session = Depends(get_db)
 ):
@@ -39,10 +41,13 @@ async def register(
     Creates a new user with hashed password and learning profile,
     then returns JWT access token for immediate login.
 
+    Sets httpOnly cookie for browser-based authentication.
+
     Rate limit: 3 registrations per hour per IP
 
     Args:
         user_data: User registration data
+        response: FastAPI response to set cookies
         db: Database session
 
     Returns:
@@ -52,6 +57,16 @@ async def register(
         HTTPException 409: Email already registered
     """
     user, access_token = AuthService.register(db, user_data)
+
+    # Set httpOnly cookie for browser-based auth
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=settings.environment == "production",  # HTTPS in production
+        samesite="lax",
+        max_age=30 * 24 * 60 * 60,  # 30 days
+    )
 
     return AuthResponse(
         access_token=access_token,
@@ -70,6 +85,7 @@ async def register(
 @limiter.limit("5/15minutes")
 async def login(
     request: Request,
+    response: Response,
     login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
@@ -77,11 +93,13 @@ async def login(
     Authenticate user and create session
 
     Validates credentials and returns JWT access token.
+    Sets httpOnly cookie with expiration based on remember_me flag.
 
     Rate limit: 5 login attempts per 15 minutes per IP
 
     Args:
         login_data: Login credentials
+        response: FastAPI response to set cookies
         db: Database session
 
     Returns:
@@ -92,6 +110,17 @@ async def login(
         HTTPException 403: Account inactive
     """
     user, access_token = AuthService.login(db, login_data)
+
+    # Set httpOnly cookie (30 days if remember_me, else 24 hours)
+    max_age = 30 * 24 * 60 * 60 if login_data.remember_me else 24 * 60 * 60
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=settings.environment == "production",
+        samesite="lax",
+        max_age=max_age,
+    )
 
     return AuthResponse(
         access_token=access_token,
@@ -108,31 +137,31 @@ async def login(
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Logout current user and invalidate session
 
-    Note: For stateless JWT, logout is handled client-side by
-    removing the token. This endpoint is provided for consistency
-    and can be extended to blacklist tokens if needed.
+    Clears the httpOnly cookie containing the JWT token.
 
     Args:
+        response: FastAPI response to clear cookies
         current_user: Authenticated user
         db: Database session
 
     Returns:
         No content (204)
     """
-    # For stateless JWT, no server-side action needed
-    # Client should remove token from storage
-    # Future: Implement token blacklist if required
+    # Clear the httpOnly cookie
+    response.delete_cookie(key="access_token", samesite="lax")
     return
 
 
 @router.post("/refresh", response_model=AuthResponse)
 async def refresh_token(
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -141,8 +170,10 @@ async def refresh_token(
 
     Generates a new token with extended expiration for authenticated users.
     Used to maintain persistent sessions without re-login.
+    Sets new httpOnly cookie with 30-day expiration.
 
     Args:
+        response: FastAPI response to set cookies
         current_user: Authenticated user from current JWT
         db: Database session
 
@@ -158,6 +189,16 @@ async def refresh_token(
     access_token = create_access_token(
         data={"sub": current_user.email, "user_id": current_user.id},
         remember_me=True  # Refresh always extends session
+    )
+
+    # Set new httpOnly cookie with extended expiration
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=settings.environment == "production",
+        samesite="lax",
+        max_age=30 * 24 * 60 * 60,  # 30 days
     )
 
     return AuthResponse(

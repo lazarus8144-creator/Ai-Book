@@ -44,34 +44,31 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? 'https://your-api.example.com'
   : 'http://localhost:8000';
 
+// Configure axios to send cookies with requests
+axios.defaults.withCredentials = true;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored token on mount
-    const storedToken = localStorage.getItem('auth_token');
-    if (storedToken) {
-      setToken(storedToken);
-      fetchCurrentUser(storedToken);
-    } else {
-      setIsLoading(false);
-    }
+    // Try to fetch current user using httpOnly cookie
+    // If cookie exists and is valid, user will be authenticated
+    fetchCurrentUser();
   }, []);
 
-  const fetchCurrentUser = async (authToken: string) => {
+  const fetchCurrentUser = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/v1/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
+      // Cookie will be automatically sent with this request
+      const response = await axios.get(`${API_BASE_URL}/api/v1/auth/me`);
       setUser(response.data);
+      // Token is in cookie, but we set a placeholder for UI state
+      setToken('cookie-auth');
     } catch (error) {
+      // No valid cookie or authentication failed
       console.error('Failed to fetch current user:', error);
-      // Token might be invalid, clear it
-      localStorage.removeItem('auth_token');
+      setUser(null);
       setToken(null);
     } finally {
       setIsLoading(false);
@@ -80,16 +77,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string, rememberMe = false) => {
     try {
+      // Cookie will be automatically set by backend
       const response = await axios.post(`${API_BASE_URL}/api/v1/auth/login`, {
         email,
         password,
         remember_me: rememberMe,
       });
 
-      const { access_token, user: userData } = response.data;
-      setToken(access_token);
+      const { user: userData } = response.data;
+      setToken('cookie-auth'); // Token is in httpOnly cookie
       setUser(userData);
-      localStorage.setItem('auth_token', access_token);
     } catch (error) {
       if (axios.isAxiosError(error)) {
         throw new Error(error.response?.data?.detail || 'Login failed');
@@ -100,12 +97,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (userData: RegisterData) => {
     try {
+      // Cookie will be automatically set by backend
       const response = await axios.post(`${API_BASE_URL}/api/v1/auth/register`, userData);
 
-      const { access_token, user: newUser } = response.data;
-      setToken(access_token);
+      const { user: newUser } = response.data;
+      setToken('cookie-auth'); // Token is in httpOnly cookie
       setUser(newUser);
-      localStorage.setItem('auth_token', access_token);
     } catch (error) {
       if (axios.isAxiosError(error)) {
         throw new Error(error.response?.data?.detail || 'Registration failed');
@@ -114,10 +111,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('auth_token');
+  const logout = async () => {
+    try {
+      // Call backend to clear cookie
+      await axios.post(`${API_BASE_URL}/api/v1/auth/logout`);
+    } catch (error) {
+      console.error('Logout request failed:', error);
+    } finally {
+      // Clear local state regardless of API call result
+      setUser(null);
+      setToken(null);
+    }
   };
 
   const value: AuthContextType = {
