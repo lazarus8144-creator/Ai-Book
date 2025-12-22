@@ -11,6 +11,7 @@ from slowapi.util import get_remote_address
 from datetime import datetime, timedelta
 import secrets
 import logging
+import os
 
 from app.database import get_db
 from app.auth.schemas import PasswordResetRequest, PasswordResetConfirm
@@ -26,9 +27,21 @@ router = APIRouter(prefix="/api/v1/auth", tags=["password-reset"])
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
+# Conditional rate limiting - no-op decorator in test mode
+def conditional_limit(limit_string):
+    """Apply rate limit only when not in test mode"""
+    def decorator(func):
+        if os.getenv("TESTING") == "true":
+            # In test mode, return function as-is (no rate limiting)
+            return func
+        else:
+            # In production, apply rate limiting
+            return limiter.limit(limit_string)(func)
+    return decorator
+
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
-@limiter.limit("5/hour")
+@conditional_limit("5/hour")
 async def forgot_password(
     request: Request,
     reset_request: PasswordResetRequest,

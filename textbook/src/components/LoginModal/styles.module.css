@@ -182,3 +182,18 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.submitButton:focus-visible {
+  outline: 3px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+.checkboxGroup input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}

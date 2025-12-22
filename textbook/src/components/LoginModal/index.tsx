@@ -102,8 +102,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           </div>
 
           <div className={styles.checkboxGroup}>
-            <label>
-              <input type="checkbox" {...register('remember_me')} />
+            <label htmlFor="remember_me">
+              <input id="remember_me" type="checkbox" {...register('remember_me')} />
               <span>Remember me for 30 days</span>
             </label>
           </div>

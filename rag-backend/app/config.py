@@ -31,7 +31,10 @@ class Settings(BaseSettings):
     api_reload: bool = True
 
     # CORS Configuration
-    cors_origins: str = "http://localhost:3000"  # Comma-separated list
+    # Comma-separated list of allowed origins
+    # Development: http://localhost:3000
+    # Production: https://yourdomain.com,https://www.yourdomain.com
+    cors_origins: str = "http://localhost:3000"
 
     @property
     def cors_origins_list(self) -> List[str]:

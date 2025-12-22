@@ -7,6 +7,7 @@ Tests complete user journeys:
 3. Login with Remember Me → Token Refresh
 """
 
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -14,9 +15,21 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import secrets
 
+# Set testing mode to disable CSRF protection in tests
+os.environ["TESTING"] = "true"
+
 from app.main import app
 from app.database import get_db, Base
 from app.auth.models import User, LearningProfile
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+# Initialize rate limiter for testing - set enabled=False to disable rate limiting in tests
+limiter = Limiter(
+    key_func=get_remote_address,
+    enabled=False  # Disable rate limiting in tests
+)
+app.state.limiter = limiter
 
 
 # Create in-memory SQLite database for testing

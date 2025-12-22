@@ -19,6 +19,7 @@ from app.auth.service import AuthService
 from app.auth.dependencies import get_current_user
 from app.auth.models import User
 from app.config import settings
+import os
 
 # Create router
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
@@ -26,9 +27,21 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
+# Conditional rate limiting - no-op decorator in test mode
+def conditional_limit(limit_string):
+    """Apply rate limit only when not in test mode"""
+    def decorator(func):
+        if os.getenv("TESTING") == "true":
+            # In test mode, return function as-is (no rate limiting)
+            return func
+        else:
+            # In production, apply rate limiting
+            return limiter.limit(limit_string)(func)
+    return decorator
+
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("3/hour")
+@conditional_limit("3/hour")
 async def register(
     request: Request,
     response: Response,
@@ -82,7 +95,7 @@ async def register(
 
 
 @router.post("/login", response_model=AuthResponse)
-@limiter.limit("5/15minutes")
+@conditional_limit("5/15minutes")
 async def login(
     request: Request,
     response: Response,
