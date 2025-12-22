@@ -4,28 +4,36 @@ Authentication dependencies for FastAPI
 Provides dependency injection functions for authentication and authorization.
 """
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request, Cookie
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
+from typing import Optional
 from app.database import get_db
 from app.auth.models import User
 from app.auth.service import AuthService
 from app.config import settings
 
-# HTTP Bearer token security scheme
-security = HTTPBearer()
+# HTTP Bearer token security scheme (optional for cookie fallback)
+security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    access_token: Optional[str] = Cookie(default=None),
     db: Session = Depends(get_db)
 ) -> User:
     """
     Dependency to get the current authenticated user from JWT token
 
+    Supports both cookie-based authentication (for browsers) and
+    Authorization header (for API clients).
+
     Args:
-        credentials: HTTP Bearer token from Authorization header
+        request: FastAPI request object
+        credentials: Optional HTTP Bearer token from Authorization header
+        access_token: Optional JWT token from httpOnly cookie
         db: Database session
 
     Returns:
@@ -40,9 +48,18 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"}
     )
 
+    # Try to get token from cookie first, then Authorization header
+    token = None
+    if access_token:
+        token = access_token
+    elif credentials:
+        token = credentials.credentials
+
+    if not token:
+        raise credentials_exception
+
     try:
         # Decode JWT token
-        token = credentials.credentials
         payload = jwt.decode(
             token,
             settings.jwt_secret_key,

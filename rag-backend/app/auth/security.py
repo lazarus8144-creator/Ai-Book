@@ -41,32 +41,41 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: dict,
+    expires_delta: Optional[timedelta] = None,
+    remember_me: bool = False
+) -> str:
     """
     Create a JWT access token
 
     Args:
         data: Dictionary of claims to encode in the token
         expires_delta: Optional custom expiration time
+        remember_me: If True, extends token validity to 30 days (default: 24 hours)
 
     Returns:
         Encoded JWT token string
     """
     to_encode = data.copy()
-    
+
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
+    elif remember_me:
+        # Extended session: 30 days
+        expire = datetime.utcnow() + timedelta(days=30)
     else:
+        # Default session: 24 hours (from settings)
         expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
-    
+
     to_encode.update({"exp": expire})
-    
+
     encoded_jwt = jwt.encode(
-        to_encode, 
-        settings.jwt_secret_key, 
+        to_encode,
+        settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm
     )
-    
+
     return encoded_jwt
 
 

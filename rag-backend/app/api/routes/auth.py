@@ -131,6 +131,48 @@ async def logout(
     return
 
 
+@router.post("/refresh", response_model=AuthResponse)
+async def refresh_token(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Refresh JWT access token
+
+    Generates a new token with extended expiration for authenticated users.
+    Used to maintain persistent sessions without re-login.
+
+    Args:
+        current_user: Authenticated user from current JWT
+        db: Database session
+
+    Returns:
+        AuthResponse: New access token and user profile
+
+    Raises:
+        HTTPException 401: If token is invalid or expired
+    """
+    from app.auth.security import create_access_token
+
+    # Generate new token with 30-day expiry (refresh always uses extended expiry)
+    access_token = create_access_token(
+        data={"sub": current_user.email, "user_id": current_user.id},
+        remember_me=True  # Refresh always extends session
+    )
+
+    return AuthResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserResponse(
+            id=current_user.id,
+            email=current_user.email,
+            is_active=current_user.is_active,
+            created_at=current_user.created_at,
+            profile=current_user.learning_profile
+        )
+    )
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(
     current_user: User = Depends(get_current_user)

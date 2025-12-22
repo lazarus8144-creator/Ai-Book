@@ -111,14 +111,13 @@ class AuthService:
         # Update last login
         user.last_login_at = datetime.utcnow()
         db.commit()
-        
+
         # Generate JWT token with extended expiry if remember_me
-        expires_delta = timedelta(days=30) if login_data.remember_me else None
         access_token = create_access_token(
             data={"sub": user.email, "user_id": user.id},
-            expires_delta=expires_delta
+            remember_me=login_data.remember_me
         )
-        
+
         return user, access_token
     
     @staticmethod
