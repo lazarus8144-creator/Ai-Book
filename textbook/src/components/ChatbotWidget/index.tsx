@@ -63,11 +63,13 @@ export default function ChatbotWidget() {
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get response');
+      console.error('Chatbot error:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMsg);
 
       const errorMessage: Message = {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again later.',
+        content: `Sorry, I encountered an error: ${errorMsg}\n\nPlease check:\n- Backend is running on http://localhost:8000\n- Your internet connection\n- Browser console for details`,
         timestamp: new Date(),
       };
 
