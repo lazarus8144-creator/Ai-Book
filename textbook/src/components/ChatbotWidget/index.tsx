@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import styles from './styles.module.css';
 import { Message, QueryResponse } from './types';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// Use globalThis to safely access environment variables in browser
+const API_URL = (typeof window !== 'undefined' && (window as any).REACT_APP_API_URL) || 'http://localhost:8000';
 
 const WELCOME_MESSAGE: Message = {
   role: 'assistant',
