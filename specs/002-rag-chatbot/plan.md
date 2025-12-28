@@ -16,14 +16,15 @@ This document outlines the technical architecture for implementing a Retrieval-A
 - Provide FastAPI REST API for query processing
 - Integrate React chatbot widget into Docusaurus frontend
 - Meet <3s response time requirement with 100+ concurrent users
-- Operate entirely on free tiers (Qdrant 1GB, Railway 500 hrs, OpenAI hackathon credits)
+- Operate entirely on free tiers (Qdrant 1GB, Railway 500 hrs, Groq API, local embeddings)
 
 **Key Architectural Decisions:**
 1. Railway hosting (no cold starts vs Render's 15min cold starts)
-2. GPT-4o-mini (3.3x cheaper, faster than GPT-3.5-turbo)
-3. Semantic chunking (header-based, quality over simplicity)
-4. No Neon Postgres in Phase 1 (defer to Phase 2 with auth)
-5. Root.tsx integration (simpler than Layout swizzle)
+2. Groq llama-3.3-70b-versatile (free, fast, better than GPT-4o-mini)
+3. Local sentence-transformers embeddings (free, no API latency)
+4. Semantic chunking (header-based, quality over simplicity)
+5. No Neon Postgres in Phase 1 (defer to Phase 2 with auth)
+6. Root.tsx integration (simpler than Layout swizzle)
 
 ---
 
@@ -51,9 +52,9 @@ graph TB
     Docusaurus --> ChatWidget[ChatbotWidget Component]
     ChatWidget --> API[FastAPI Backend]
     API --> RAG[RAG Pipeline Service]
-    RAG --> Embeddings[OpenAI Embeddings]
+    RAG --> Embeddings[Local Sentence-Transformers]
     RAG --> VectorDB[(Qdrant Cloud)]
-    RAG --> LLM[OpenAI GPT-4o-mini]
+    RAG --> LLM[Groq llama-3.3-70b]
 
     Ingestion[Ingestion Script] --> Processor[Document Processor]
     Processor --> Embeddings
@@ -75,8 +76,8 @@ graph TB
 | **RAG Pipeline** | Query→Embed→Search→Generate flow | Custom service |
 | **Document Processor** | Markdown→Chunks→Metadata extraction | Custom service |
 | **Vector Store Service** | Qdrant client wrapper, search logic | qdrant-client |
-| **Embedding Service** | OpenAI embedding generation with cache | openai SDK |
-| **LLM Service** | Answer generation with prompt engineering | openai SDK |
+| **Embedding Service** | Local embedding generation with sentence-transformers | sentence-transformers |
+| **LLM Service** | Answer generation with prompt engineering | groq SDK |
 | **Qdrant Cloud** | Vector storage and similarity search | Managed service |
 | **Railway** | Backend hosting | PaaS |
 
@@ -86,10 +87,10 @@ graph TB
 1. User types question in ChatbotWidget
 2. Frontend sends POST to `/api/v1/query`
 3. Backend validates input, checks rate limit
-4. RAG pipeline embeds question (OpenAI)
+4. RAG pipeline embeds question (local sentence-transformers)
 5. Vector search finds top 5 chunks (Qdrant)
 6. Context assembled from chunks
-7. LLM generates answer (GPT-4o-mini)
+7. LLM generates answer (Groq llama-3.3-70b)
 8. Response formatted with sources
 9. Frontend displays answer + sources
 
@@ -122,11 +123,11 @@ backend/
 │   │
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── embeddings.py          # OpenAI embedding wrapper
+│   │   ├── embeddings.py          # sentence-transformers embedding wrapper
 │   │   ├── vector_store.py        # Qdrant client wrapper
 │   │   ├── rag_pipeline.py        # Core RAG orchestration
 │   │   ├── document_processor.py  # Markdown chunking
-│   │   └── llm_service.py         # OpenAI chat completion
+│   │   └── llm_service.py         # Groq chat completion
 │   │
 │   ├── utils/
 │   │   ├── __init__.py
@@ -219,12 +220,15 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 class Settings(BaseSettings):
-    # OpenAI Configuration
-    OPENAI_API_KEY: str
-    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
-    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
-    OPENAI_TEMPERATURE: float = 0.1
-    OPENAI_MAX_TOKENS: int = 500
+    # Groq Configuration
+    GROQ_API_KEY: str
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_TEMPERATURE: float = 0.1
+    GROQ_MAX_TOKENS: int = 2000
+
+    # Embedding Configuration (Local)
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_DEVICE: str = "cpu"
 
     # Qdrant Configuration
     QDRANT_URL: str
@@ -307,7 +311,7 @@ class HealthResponse(BaseModel):
     """Response schema for GET /api/v1/health"""
     status: str
     qdrant_connected: bool
-    openai_available: bool
+    groq_available: bool
     version: str = "1.0.0"
 
 class IngestRequest(BaseModel):
@@ -355,7 +359,7 @@ class Chunk:
 ```json
 {
   "id": 1234567890,
-  "vector": [0.123, -0.456, ...],  // 1536 dimensions
+  "vector": [0.123, -0.456, ...],  // 384 dimensions (sentence-transformers)
   "payload": {
     "text": "ROS 2 (Robot Operating System 2) is...",
     "module": "module-1-ros2",
@@ -479,7 +483,7 @@ export default function Root({ children }) {
 **Chunk Size Rationale:**
 - 800 tokens ≈ 600 words ≈ 3-4 paragraphs
 - Large enough for context, small enough for precision
-- OpenAI context window (128K) can handle 100+ chunks easily
+- Groq llama-3.3-70b context window (128K) can handle 100+ chunks easily
 - 100-token overlap prevents context loss at boundaries
 
 ### Example: Processing `module-1-ros2/01-introduction.md`
@@ -565,11 +569,11 @@ https://your-project.vercel.app/module-1-ros2/01-introduction
 
 | Component | Platform | Tier | Cost |
 |-----------|----------|------|------|
-| Frontend | GitHub Pages | Free | $0 |
+| Frontend | Vercel | Free | $0 |
 | Backend | Railway | Free (500 hrs/mo) | $0 |
 | Vector DB | Qdrant Cloud | Free (1GB) | $0 |
-| Embeddings | OpenAI API | Hackathon credits | ~$0.003 one-time |
-| LLM | OpenAI API | Hackathon credits | ~$1.20/month |
+| Embeddings | Local (sentence-transformers) | N/A | $0 |
+| LLM | Groq API | Free (14,400 req/day) | $0 |
 
 ### Railway Deployment
 
@@ -591,11 +595,13 @@ https://your-project.vercel.app/module-1-ros2/01-introduction
 
 **Environment Variables (Set in Railway Dashboard):**
 ```
-OPENAI_API_KEY=sk-...
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-OPENAI_CHAT_MODEL=gpt-4o-mini
-OPENAI_TEMPERATURE=0.1
-OPENAI_MAX_TOKENS=500
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_TEMPERATURE=0.1
+GROQ_MAX_TOKENS=2000
+
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_DEVICE=cpu
 
 QDRANT_URL=https://xxx-yyy.qdrant.io
 QDRANT_API_KEY=...
@@ -643,10 +649,10 @@ curl -X OPTIONS https://your-backend.railway.app/api/v1/query \
 
 | Operation | Target | Strategy |
 |-----------|--------|----------|
-| Question embedding | <100ms | LRU cache (1000 items) |
+| Question embedding | <50ms | Local model, no API latency |
 | Vector search (Qdrant) | <200ms | Optimized collection config |
 | Context assembly | <10ms | In-memory string ops |
-| LLM generation | <2000ms | gpt-4o-mini (fastest model) |
+| LLM generation | <2000ms | Groq llama-3.3-70b (fast inference) |
 | **Total (p95)** | **<3000ms** | Monitored via response_time_ms |
 
 ### Caching Strategy
@@ -659,13 +665,14 @@ from functools import lru_cache
 def get_embedding(text: str) -> list[float]:
     # Cache common questions
     # Expected hit rate: 50-70% after warmup
-    response = openai_client.embeddings.create(...)
-    return response.data[0].embedding
+    # Local model, no API calls needed
+    embedding = model.encode(text)
+    return embedding.tolist()
 ```
 
 **Benefits:**
-- Duplicate questions answered instantly
-- Reduces OpenAI API costs
+- Duplicate questions answered instantly (cache hit)
+- No API costs (local model)
 - 1000 items ≈ 10KB memory (negligible)
 
 **Tier 2: Response Cache (Phase 2 Future Enhancement)**
@@ -678,20 +685,22 @@ def get_embedding(text: str) -> list[float]:
 
 ### Cost Optimization
 
-**OpenAI API Cost Breakdown:**
+**Cost Breakdown (100% FREE):**
 
-| Operation | Model | Cost/1M Tokens | Volume | Monthly Cost |
-|-----------|-------|----------------|--------|--------------|
-| Ingestion (one-time) | text-embedding-3-small | $0.02 | ~150K | $0.003 |
-| Query embeddings | text-embedding-3-small | $0.02 | 1K queries × 50 tokens | $0.001 |
-| LLM generation | gpt-4o-mini | $0.15 input, $0.60 output | 1K queries × 2K tokens | $1.20 |
-| **Total** | | | | **$1.20/month** |
+| Operation | Service | Cost | Volume | Monthly Cost |
+|-----------|---------|------|--------|--------------|
+| Ingestion (one-time) | Local sentence-transformers | $0 | Unlimited | $0 |
+| Query embeddings | Local sentence-transformers | $0 | Unlimited | $0 |
+| LLM generation | Groq API (free tier) | $0 | 14,400/day | $0 |
+| Vector storage | Qdrant Cloud (free tier) | $0 | 1GB | $0 |
+| Backend hosting | Railway (free tier) | $0 | 500 hrs/mo | $0 |
+| **Total** | | | | **$0/month** |
 
-**Budget Monitoring:**
+**Usage Monitoring:**
 ```python
 # Track in response
 {
-  "tokens_used": 1234,  # Log to file for cost tracking
+  "tokens_used": 1234,  # Monitor Groq usage (14,400/day limit)
   "response_time_ms": 2456
 }
 ```
@@ -809,39 +818,73 @@ Use Railway over Render.
 
 ---
 
-### ADR-002: GPT-4o-mini vs GPT-3.5-turbo for LLM
+### ADR-002: Groq llama-3.3-70b vs OpenAI Models for LLM
 
 **Status:** Accepted
 
 **Context:**
-Need cost-effective LLM for answer generation within hackathon credits.
+Need cost-effective, fast LLM for answer generation.
 
 **Decision:**
-Use GPT-4o-mini.
+Use Groq llama-3.3-70b-versatile.
 
 **Rationale:**
-| Model | Input Cost | Output Cost | Speed | Quality |
-|-------|------------|-------------|-------|---------|
-| gpt-4o-mini | $0.15/1M | $0.60/1M | Fast | Good |
-| gpt-3.5-turbo | $0.50/1M | $1.50/1M | Medium | Good |
-| gpt-4-turbo | $10/1M | $30/1M | Slow | Excellent |
+| Model | Cost | Requests/Day | Speed | Quality |
+|-------|------|--------------|-------|---------|
+| Groq llama-3.3-70b | **$0** | **14,400 (free)** | **Very Fast** | Excellent |
+| OpenAI gpt-4o-mini | $0.15/1M in | 2,000 (on hackathon credits) | Fast | Good |
+| OpenAI gpt-3.5-turbo | $0.50/1M in | 600 (on hackathon credits) | Medium | Good |
 
-- gpt-4o-mini is **3.3x cheaper** than gpt-3.5-turbo
-- Faster response times (~1-2s vs ~2-3s)
-- Quality sufficient for educational Q&A
-- Estimated cost: $1.20/month vs $3.50/month
+- Groq is **100% free** (14,400 requests/day = 600/hour)
+- Faster inference than OpenAI (~1s vs ~2s)
+- Llama 3.3 70B has excellent quality
+- No API cost concerns or quota management needed
 
 **Consequences:**
-- Lower cost per query
+- Zero cost per query
 - Faster responses → better UX
-- Acceptable answer quality for textbook content
+- No budget constraints
+- Excellent answer quality for textbook content
 
 **Fallback:**
-If quality issues arise, can upgrade to gpt-3.5-turbo or add temperature tuning.
+If Groq has downtime, can temporarily switch to OpenAI gpt-4o-mini with hackathon credits.
 
 ---
 
-### ADR-003: Semantic Chunking vs Fixed-Size Chunking
+### ADR-003: Local Embeddings vs OpenAI Embeddings
+
+**Status:** Accepted
+
+**Context:**
+Need embedding model for document and query vectorization.
+
+**Decision:**
+Use local sentence-transformers/all-MiniLM-L6-v2 instead of OpenAI embeddings.
+
+**Rationale:**
+| Model | Cost | Dimensions | Speed | Quality |
+|-------|------|------------|-------|---------|
+| **sentence-transformers (local)** | **$0** | **384** | **<50ms** | Good |
+| OpenAI text-embedding-3-small | $0.02/1M tokens | 1536 | ~100-200ms (API) | Excellent |
+
+- **100% free** - no API costs for embeddings
+- **Faster** - no network latency, local inference
+- **Good quality** - all-MiniLM-L6-v2 is proven for semantic search
+- **No quota concerns** - unlimited embedding generation
+- **Privacy** - no data sent to external API
+
+**Consequences:**
+- Zero embedding costs (ingestion + queries)
+- Faster embedding generation (no API latency)
+- Need to load model in backend (~90MB RAM)
+- Slightly lower dimension space (384 vs 1536) - acceptable for textbook Q&A
+
+**Fallback:**
+If retrieval quality is poor, can upgrade to OpenAI text-embedding-3-small or larger local model.
+
+---
+
+### ADR-004: Semantic Chunking vs Fixed-Size Chunking
 
 **Status:** Accepted
 
@@ -1060,12 +1103,15 @@ Use custom `src/theme/Root.tsx` wrapper.
 
 **`.env.example`:**
 ```bash
-# OpenAI Configuration
-OPENAI_API_KEY=sk-...
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-OPENAI_CHAT_MODEL=gpt-4o-mini
-OPENAI_TEMPERATURE=0.1
-OPENAI_MAX_TOKENS=500
+# Groq Configuration
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_TEMPERATURE=0.1
+GROQ_MAX_TOKENS=2000
+
+# Embedding Configuration (Local)
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_DEVICE=cpu
 
 # Qdrant Configuration
 QDRANT_URL=https://xxx-yyy.qdrant.io
@@ -1084,7 +1130,7 @@ RATE_LIMIT_QUERIES_PER_HOUR=100
 
 # Performance
 EMBEDDING_CACHE_SIZE=1000
-VECTOR_SEARCH_LIMIT=5
+VECTOR_SEARCH_LIMIT=10
 MAX_CHUNK_SIZE=800
 CHUNK_OVERLAP=100
 ```
@@ -1096,7 +1142,9 @@ CHUNK_OVERLAP=100
 fastapi==0.110.0
 uvicorn[standard]==0.27.0
 pydantic-settings==2.1.0
-openai==1.12.0
+groq==0.4.0
+sentence-transformers==2.2.2
+torch==2.0.1
 qdrant-client==1.7.3
 slowapi==0.1.9
 loguru==0.7.2

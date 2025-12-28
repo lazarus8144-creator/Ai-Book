@@ -55,10 +55,10 @@ Students reading the Physical AI & Humanoid Robotics textbook need quick answers
 **Priority:** P0 (Critical)
 
 The system MUST implement a Retrieval-Augmented Generation pipeline:
-- System MUST embed user questions using OpenAI text-embedding-3-small (1536 dimensions)
+- System MUST embed user questions using sentence-transformers/all-MiniLM-L6-v2 (384 dimensions, local)
 - System MUST search Qdrant vector database for top 5 most relevant chunks
 - System MUST use minimum similarity threshold of 0.7 for relevance
-- System MUST generate answers using GPT-4o-mini with retrieved context
+- System MUST generate answers using Groq llama-3.3-70b-versatile with retrieved context
 - System MUST cite sources with module name, chapter title, excerpt, and URL
 - System MUST track response time and token usage for monitoring
 
@@ -98,7 +98,7 @@ The backend MUST expose the following REST API endpoints:
 - Returns 400 for invalid input, 429 for rate limit, 500 for errors
 
 **GET /api/v1/health**
-- Response: `{ "status": string, "qdrant_connected": boolean, "openai_available": boolean, "version": string }`
+- Response: `{ "status": string, "qdrant_connected": boolean, "groq_available": boolean, "version": string }`
 
 **POST /api/v1/ingest** (Admin only)
 - Headers: `Authorization: Bearer <ADMIN_TOKEN>`
@@ -149,7 +149,8 @@ The system MUST prevent abuse:
 **Priority:** P0 (Critical - Constitution Requirement)
 
 - **Qdrant Cloud:** Free tier (1GB vectors) - estimated 15MB usage
-- **OpenAI API:** Hackathon credits only (~$1.20/month estimated)
+- **Groq API:** Free tier (14,400 requests/day) - $0/month
+- **Embeddings:** Local sentence-transformers (no API cost) - $0/month
 - **Backend Hosting:** Railway free tier (500 hours/month)
 - **Neon Postgres:** NOT USED in Phase 1 (deferred to Phase 2)
 
@@ -161,12 +162,12 @@ The system MUST prevent abuse:
 |-------|------------|---------|---------|
 | Backend Framework | FastAPI | Latest | REST API, async support |
 | Vector Database | Qdrant Cloud | Cloud | Document embeddings storage |
-| AI Embeddings | OpenAI text-embedding-3-small | Latest | Question/document embeddings |
-| AI LLM | OpenAI GPT-4o-mini | Latest | Answer generation |
+| AI Embeddings | sentence-transformers/all-MiniLM-L6-v2 | Latest | Question/document embeddings (local) |
+| AI LLM | Groq llama-3.3-70b-versatile | Latest | Answer generation |
 | Frontend Framework | Docusaurus | 3.9.2 | Existing textbook platform |
 | Frontend Language | TypeScript | 5.6.2 | Type-safe components |
 | Backend Hosting | Railway | Cloud | Free tier, no cold starts |
-| Frontend Hosting | GitHub Pages | Cloud | Existing deployment |
+| Frontend Hosting | Vercel | Cloud | Production deployment |
 
 ### Additional Dependencies
 
@@ -233,9 +234,9 @@ The following are explicitly **NOT** part of Phase 1:
 | Dependency | Status | Risk | Mitigation |
 |------------|--------|------|------------|
 | Textbook content complete | ✅ Complete | Low | Already done |
-| OpenAI API access | ✅ Available | Low | Hackathon credits confirmed |
-| Qdrant Cloud account | ⚠️ Need to create | Low | Free tier, 5min setup |
-| Railway account | ⚠️ Need to create | Low | Free tier, 10min setup |
+| Groq API access | ✅ Available | Low | Free tier (14,400 requests/day) |
+| Qdrant Cloud account | ✅ Complete | Low | Free tier, already setup |
+| Railway account | ✅ Complete | Low | Free tier, already setup |
 | GitHub repo access | ✅ Available | Low | Already setup |
 
 ### Internal Dependencies
@@ -253,8 +254,8 @@ The following are explicitly **NOT** part of Phase 1:
 
 | Risk | Likelihood | Impact | Mitigation Strategy |
 |------|------------|--------|---------------------|
-| RAG responses too slow (>3s) | Medium | High | Use gpt-4o-mini (fastest), cache embeddings, optimize chunk retrieval to top 3 if needed |
-| OpenAI quota exhausted | Low | High | Aggressive rate limiting (20/min), monitor usage daily, pre-cache common questions |
+| RAG responses too slow (>3s) | Low | High | Groq llama-3.3-70b is fast, local embeddings eliminate API latency, optimize chunk retrieval to top 3 if needed |
+| Groq rate limit exceeded (14,400/day) | Very Low | Medium | Aggressive rate limiting (20/min), monitor usage daily, 14,400/day = 600/hour is plenty |
 | Qdrant free tier exceeded (>1GB) | Very Low | Medium | Current usage 15MB (~1.5% of limit), monitor weekly |
 | Railway free hours exhausted | Medium | High | Deploy 1 week before deadline, monitor usage, fallback to Render with cold starts |
 | Poor answer quality | Medium | Medium | Improve prompt engineering, adjust similarity threshold, expand chunk size |
@@ -264,15 +265,15 @@ The following are explicitly **NOT** part of Phase 1:
 ### Contingency Plans
 
 **If RAG is too slow:**
-1. Reduce max_tokens to 300 (from 500)
+1. Reduce max_tokens to 1500 (from 2000)
 2. Reduce vector search to top 3 (from 5)
 3. Implement aggressive caching of common questions
 4. Accept performance violation and document
 
-**If OpenAI quota exhausted:**
-1. Switch to Groq API (free Llama 3.1)
+**If Groq rate limit exceeded:**
+1. Switch to different Groq model (mixtral-8x7b, faster)
 2. Show "Service temporarily limited" message
-3. Whitelist demo questions for presentation
+3. Increase rate limiting to 10/min per IP
 
 **If Railway hours exhausted:**
 1. Switch to Render (accept 15min cold starts)
@@ -289,8 +290,8 @@ The following are explicitly **NOT** part of Phase 1:
 - [x] **Performance Requirements:** <3s RAG, <2s page loads documented
 - [x] **Accessibility Standards:** WCAG 2.1 AA compliance required
 - [x] **Security Protocols:** HTTPS, no secrets, CORS, rate limiting
-- [x] **Budget Constraints:** Free tiers only (Qdrant, Railway, OpenAI credits)
-- [x] **Mandatory Tech Stack:** FastAPI, Qdrant, OpenAI, Docusaurus confirmed
+- [x] **Budget Constraints:** Free tiers only (Qdrant, Railway, Groq, local embeddings)
+- [x] **Mandatory Tech Stack:** FastAPI, Qdrant, Groq, Docusaurus confirmed
 
 ### Quality Gates
 

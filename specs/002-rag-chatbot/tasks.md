@@ -19,7 +19,7 @@
 
 **Dependencies:**
 - Textbook content complete ✅
-- OpenAI API access ✅
+- Groq API access ✅
 - Development environment ready
 
 **Critical Path:**
@@ -60,7 +60,9 @@ Create FastAPI project structure with proper configuration, CORS middleware, and
    fastapi==0.110.0
    uvicorn[standard]==0.27.0
    pydantic-settings==2.1.0
-   openai==1.12.0
+   groq==0.4.0
+   sentence-transformers==2.2.2
+   torch==2.0.1
    qdrant-client==1.7.3
    slowapi==0.1.9
    loguru==0.7.2
@@ -162,7 +164,7 @@ Create Qdrant Cloud account, configure vector database cluster, and implement co
 4. **Create `app/services/vector_store.py`**
    - Initialize Qdrant client
    - Implement collection creation
-   - Configure 1536 dimensions (text-embedding-3-small)
+   - Configure 384 dimensions (sentence-transformers/all-MiniLM-L6-v2)
    - Use cosine distance metric
 
 5. **Implement connection test**
@@ -174,7 +176,7 @@ Create Qdrant Cloud account, configure vector database cluster, and implement co
 - [ ] Qdrant cluster accessible via API
 - [ ] Collection auto-created on first run
 - [ ] Connection test passes
-- [ ] Collection configured with correct dimensions (1536)
+- [ ] Collection configured with correct dimensions (384)
 - [ ] Cosine distance metric set
 
 #### Test Cases
@@ -196,7 +198,7 @@ def test_collection_exists():
 def test_collection_config():
     store = VectorStore()
     collection_info = store.client.get_collection("textbook_chunks")
-    assert collection_info.config.params.vectors.size == 1536
+    assert collection_info.config.params.vectors.size == 384
     assert collection_info.config.params.vectors.distance == "Cosine"
 ```
 
@@ -338,35 +340,33 @@ def test_overlap_implementation():
 **Assigned To:** Backend Dev
 
 #### Description
-Create OpenAI embedding service with LRU caching for repeated queries.
+Create local sentence-transformers embedding service with LRU caching for repeated queries.
 
 #### Implementation Steps
 
 1. **Create `app/services/embeddings.py`**
 
-2. **Initialize OpenAI client**
+2. **Initialize sentence-transformers model**
    ```python
-   from openai import OpenAI
+   from sentence_transformers import SentenceTransformer
    from app.config import settings
-   
-   client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+   # Load model once at module level (singleton pattern)
+   model = SentenceTransformer(settings.EMBEDDING_MODEL, device=settings.EMBEDDING_DEVICE)
    ```
 
 3. **Implement embedding generation**
    ```python
    def get_embedding(text: str) -> list[float]:
-       response = client.embeddings.create(
-           model="text-embedding-3-small",
-           input=text,
-           encoding_format="float"
-       )
-       return response.data[0].embedding
+       # Generate embedding using local model
+       embedding = model.encode(text, convert_to_numpy=True)
+       return embedding.tolist()
    ```
 
 4. **Add LRU cache**
    ```python
    from functools import lru_cache
-   
+
    @lru_cache(maxsize=1000)
    def get_embedding_cached(text: str) -> tuple[float]:
        # Returns tuple for hashability
@@ -375,16 +375,16 @@ Create OpenAI embedding service with LRU caching for repeated queries.
    ```
 
 5. **Add error handling**
-   - Handle API errors gracefully
-   - Retry logic for transient failures
-   - Log errors with loguru
+   - Handle model loading errors gracefully
+   - Validate input text length
+   - Log performance metrics with loguru
 
 #### Acceptance Criteria
-- [ ] Embeddings return 1536-dimension vectors
+- [ ] Embeddings return 384-dimension vectors
 - [ ] Cache hit rate >50% for duplicate texts
-- [ ] API errors handled gracefully with retries
-- [ ] Embedding generation <100ms for cached queries
-- [ ] No API calls for identical text
+- [ ] Model loading errors handled gracefully
+- [ ] Embedding generation <50ms for cached queries
+- [ ] Model loads successfully on startup
 
 #### Test Cases
 ```python
@@ -394,19 +394,19 @@ from app.services.embeddings import EmbeddingService
 def test_embedding_dimensions():
     service = EmbeddingService()
     embedding = service.get_embedding("test text")
-    assert len(embedding) == 1536
+    assert len(embedding) == 384
     assert all(isinstance(x, float) for x in embedding)
 
 def test_embedding_cache():
     service = EmbeddingService()
     text = "What is ROS 2?"
-    
+
     # First call - cache miss
     emb1 = service.get_embedding(text)
-    
+
     # Second call - cache hit
     emb2 = service.get_embedding(text)
-    
+
     # Should be identical (same object from cache)
     assert emb1 == emb2
 
@@ -414,16 +414,14 @@ def test_embedding_different_texts():
     service = EmbeddingService()
     emb1 = service.get_embedding("ROS 2 is a framework")
     emb2 = service.get_embedding("Unity is a game engine")
-    
+
     # Different texts should have different embeddings
     assert emb1 != emb2
 
-@pytest.mark.integration
-def test_openai_api_error_handling():
-    # Test with invalid API key
-    with pytest.raises(OpenAIError):
-        service = EmbeddingService(api_key="invalid")
-        service.get_embedding("test")
+def test_model_loads_successfully():
+    service = EmbeddingService()
+    assert service.model is not None
+    assert service.model.get_sentence_embedding_dimension() == 384
 ```
 
 #### Files Created
@@ -440,7 +438,7 @@ def test_openai_api_error_handling():
 **Assigned To:** Backend Dev
 
 #### Description
-Create OpenAI chat completion service with prompt engineering to constrain answers to textbook content.
+Create Groq chat completion service with prompt engineering to constrain answers to textbook content.
 
 #### Implementation Steps
 
@@ -466,22 +464,22 @@ Context from textbook:
    ```python
    async def generate(self, question: str, context: str) -> tuple[str, int]:
        response = await self.client.chat.completions.create(
-           model="gpt-4o-mini",
+           model=settings.GROQ_MODEL,  # llama-3.3-70b-versatile
            messages=[
                {"role": "system", "content": SYSTEM_PROMPT.format(context=context)},
                {"role": "user", "content": question}
            ],
-           temperature=0.1,
-           max_tokens=500
+           temperature=settings.GROQ_TEMPERATURE,
+           max_tokens=settings.GROQ_MAX_TOKENS
        )
-       
+
        answer = response.choices[0].message.content
        tokens = response.usage.total_tokens
        return answer, tokens
    ```
 
 4. **Add async support**
-   - Use async OpenAI client
+   - Use async Groq client
    - Ensure proper await handling
 
 5. **Add logging**
@@ -686,7 +684,7 @@ Implement FastAPI routes for query, health check, and admin ingestion endpoints 
 2. **Create `app/routers/health.py`**
    - GET /api/v1/health endpoint
    - Check Qdrant connection
-   - Check OpenAI availability
+   - Check Groq availability
    - Return status + version
 
 3. **Create `app/routers/ingest.py`**

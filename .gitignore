@@ -86,3 +86,6 @@ build/
 htmlcov/
 *.db
 *.sqlite3
+
+# Deployment files with secrets
+RAILWAY-ENV-VARS.txt
