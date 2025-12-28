@@ -89,3 +89,5 @@ htmlcov/
 
 # Deployment files with secrets
 RAILWAY-ENV-VARS.txt
+DEPLOY-TO-RAILWAY.txt
+backend/app/services/embedding_service_hybrid.py
